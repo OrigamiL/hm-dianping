@@ -1,9 +1,11 @@
 package com.hmdp.service.impl;
 
+import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.RandomUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.dto.LoginFormDTO;
 import com.hmdp.dto.Result;
+import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.User;
 import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
@@ -15,6 +17,8 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpSession;
+
+import static com.hmdp.utils.SystemConstants.USER_NICK_NAME_PREFIX;
 
 /**
  * <p>
@@ -48,8 +52,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
     @Override
     public Result login(LoginFormDTO loginForm, HttpSession session) {
+        String phone = loginForm.getPhone();
         //1.校验手机号
-        if(RegexUtils.isPhoneInvalid(loginForm.getPhone())){
+        if(RegexUtils.isPhoneInvalid(phone)){
             return Result.fail("手机号格式不正确");
         }
         //2.校验验证码
@@ -57,14 +62,27 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             return Result.fail("验证码格式不正确");
         }
         //3.不一致，报错
-        if (!loginForm.getCode().equals(session.getAttribute("code"))){
+        if (!loginForm.getCode().equals(session.getAttribute("code").toString())){
             return Result.fail("验证码不正确");
         }
         //4.一致，根据手机号查询用户
-        User user = userMapper.selectOne();
+        User user = query().eq("phone", phone).one();
         //5.判断用户是否存在
-        if (user.getId()==null)
-        //6.不存在，创建新用户并保存到session
-        //7.存在，保存用户信息到session
+        if (user == null){
+            //6.不存在，创建新用户并保存到session
+            user = createUserWithPhone(phone);
+        }
+
+        //7.存在，保存用户DTO信息到session
+        session.setAttribute("user", BeanUtil.copyProperties(user, UserDTO.class));
+        return Result.ok();
+    }
+
+    private User createUserWithPhone(String phone) {
+        User user = new User();
+        user.setPhone(phone);
+        user.setNickName(USER_NICK_NAME_PREFIX+RandomUtil.randomString(5));
+        save(user);
+        return user;
     }
 }
